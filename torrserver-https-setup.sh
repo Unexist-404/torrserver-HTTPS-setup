@@ -35,20 +35,20 @@ fi
 echo -e "${BOLD}Введите необходимые данные:${NC}"
 echo ""
 
-read -p "Домен для TorrServer (например: mydomain.com): " DOMAIN
+read -p "Домен для TorrServer (например: mydomain.com): " DOMAIN </dev/tty
 if [ -z "$DOMAIN" ]; then
     err "Домен не может быть пустым"
 fi
 
-read -p "Логин для входа в TorrServer: " TS_USER
+read -p "Логин для входа в TorrServer: " TS_USER </dev/tty
 if [ -z "$TS_USER" ]; then
     err "Логин не может быть пустым"
 fi
 
 while true; do
-    read -s -p "Пароль для входа: " TS_PASS
+    read -s -p "Пароль для входа: " TS_PASS </dev/tty
     echo ""
-    read -s -p "Повторите пароль: " TS_PASS2
+    read -s -p "Повторите пароль: " TS_PASS2 </dev/tty
     echo ""
     if [ "$TS_PASS" = "$TS_PASS2" ]; then
         break
@@ -64,7 +64,7 @@ echo ""
 info "Домен: $DOMAIN"
 info "Логин: $TS_USER"
 echo ""
-read -p "Всё верно? Продолжить? (y/n): " CONFIRM
+read -p "Всё верно? Продолжить? (y/n): " CONFIRM </dev/tty
 if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
     echo "Отменено."
     exit 0
