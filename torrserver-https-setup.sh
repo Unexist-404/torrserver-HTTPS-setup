@@ -35,7 +35,7 @@ fi
 echo -e "${BOLD}Введите необходимые данные:${NC}"
 echo ""
 
-read -p "Домен для TorrServer (например: logpro.mooo.com): " DOMAIN
+read -p "Домен для TorrServer (например: mydomain.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
     err "Домен не может быть пустым"
 fi
