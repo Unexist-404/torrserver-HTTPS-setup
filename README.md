@@ -1,4 +1,4 @@
-# TorrServer Setup Script
+# TorrServer HTTPS Setup Script
 
 Скрипт для автоматической установки и настройки [TorrServer](https://github.com/YouROK/TorrServer) с HTTPS на Linux VPS.
 
