@@ -1,64 +1,73 @@
-# TorrServer Setup Script
+# TorrServer HTTPS Setup
 
-Скрипт для автоматической установки и настройки [TorrServer](https://github.com/YouROK/TorrServer) с HTTPS на Linux VPS.
+🇬🇧 English | [🇷🇺 Русский](README.ru.md)
 
-## Что делает скрипт
+---
 
-1. **Спрашивает данные** - домен, логин и пароль для доступа
-2. **Проверяет DNS** - убеждается что домен указывает на этот сервер
-3. **Устанавливает или обновляет** TorrServer до последней версии
-4. **Настраивает авторизацию** - создаёт файл с логином и паролем
-5. **Получает SSL-сертификат** через Let's Encrypt (certbot) с автопродлением
-6. **Настраивает файрвол** - открывает порт 8091, закрывает 8090
-7. **Запускает TorrServer** по HTTPS на порту 8091
-8. **Выводит итоговые данные** - URL, логин и пароль для сохранения
+Automatic installation and HTTPS configuration script for [TorrServer](https://github.com/YouROK/TorrServer) on Linux VPS.
 
-## Требования
+## What the script does
+
+1. **Asks for input** - domain, login and password for access
+2. **Checks DNS** - verifies that the domain points to this server
+3. **Installs or updates** TorrServer to the latest version
+4. **Configures authentication** - creates a login/password file
+5. **Obtains SSL certificate** via Let's Encrypt (certbot) with auto-renewal
+6. **Configures firewall** - opens port 8091, closes 8090
+7. **Binds HTTP to localhost only** - port 8090 is not exposed to the internet
+8. **Sets secure file permissions** - restricts access to credentials and private key
+9. **Starts TorrServer** over HTTPS on port 8091
+10. **Displays the result** - URL, login and password to save
+
+## Requirements
 
 - Linux VPS (Ubuntu/Debian)
-- Домен с A-записью, указывающей на IP сервера (FreeDNS, DuckDNS и т.п.)
-- Nginx установлен (опционально - если есть, certbot использует его плагин)
-- UFW как файрвол
+- A domain with an A record pointing to the server IP (FreeDNS, DuckDNS, etc.)
+- Certbot installed on the server
+- UFW as firewall
 
-## Использование
+## Usage
 
 ```bash
 curl -s https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/main/torrserver-https-setup.sh | sudo bash
 ```
 
-После запуска скрипт задаст три вопроса:
-- Домен (например: `mydomain.com`)
-- Логин
-- Пароль (дважды для подтверждения)
+The script will ask three questions:
+- Domain (e.g. `yourdomain.com`)
+- Login
+- Password (twice for confirmation)
 
-## Результат
+## Result
 
-После успешного завершения TorrServer будет доступен по адресу:
+After successful completion, TorrServer will be available at:
 
 ```
-https://ВАШ_ДОМЕН:8091
+https://YOUR_DOMAIN:8091
 ```
 
-Для подключения в **Lampa** (телевизор) - используй тот же адрес, логин и пароль.
+For **Lampa** (TV app) - use the same address, login and password.
 
-## Полезные команды
+## Useful commands
 
 ```bash
-# Статус сервиса
+# Service status
 systemctl status torrserver
 
-# Логи
+# Logs
 journalctl -u torrserver -n 50
 
-# Перезапуск
+# Restart
 systemctl restart torrserver
 
-# Обновление TorrServer
+# Update TorrServer
 curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | sudo bash -s -- --update --silent --root
 ```
 
-## Примечания
+## Security notes
 
-- Сертификат Let's Encrypt продлевается автоматически. После продления нужно перезапустить TorrServer: `systemctl restart torrserver`
-- Порт 8090 (HTTP) закрыт - доступ только через HTTPS на 8091
-- При повторном запуске скрипт обновит TorrServer, но не тронет существующий сертификат
+- HTTP (port 8090) is bound to `127.0.0.1` only - not accessible from the internet
+- HTTPS (port 8091) is the only external access point
+- `accs.db` has `600` permissions - readable by root only
+- SSL private key has `600` permissions
+- Let's Encrypt certificate auto-renews. After renewal, restart TorrServer: `systemctl restart torrserver`
+- Re-running the script will update TorrServer but will not overwrite an existing certificate
