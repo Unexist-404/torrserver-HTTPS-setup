@@ -196,7 +196,7 @@ After=network-online.target
 Type=simple
 NonBlocking=true
 WorkingDirectory=/opt/torrserver
-ExecStart=/opt/torrserver/torrserver -p 8090 -i 127.0.0.1 --httpauth --ssl --sslport 8091 --sslcert $CERT_PATH --sslkey $KEY_PATH
+ExecStart=/opt/torrserver/torrserver -p 8090 --httpauth --ssl --sslport 8091 --sslcert $CERT_PATH --sslkey $KEY_PATH
 Restart=on-failure
 RestartSec=58
 
