@@ -63,6 +63,10 @@ systemctl restart torrserver
 curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | sudo bash -s -- --update --silent --root
 ```
 
+## Acknowledgements
+
+This script is a setup wrapper for the excellent [TorrServer](https://github.com/YouROK/TorrServer) project by [YouROK](https://github.com/YouROK). All credit for TorrServer itself goes to the original author and the [contributors](https://github.com/YouROK/TorrServer/graphs/contributors) who made it possible. If you find TorrServer useful, consider supporting the project via [Boosty](https://boosty.to/yourok).
+
 ## Security notes
 
 - HTTP (port 8090) is bound to `127.0.0.1` only - not accessible from the internet
