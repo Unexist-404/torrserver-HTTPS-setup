@@ -1,4 +1,4 @@
-# TorrServer HTTPS Setup Script
+# TorrServer Setup Script
 
 Скрипт для автоматической установки и настройки [TorrServer](https://github.com/YouROK/TorrServer) с HTTPS на Linux VPS.
 
@@ -39,7 +39,7 @@ curl -s https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/mai
 https://ВАШ_ДОМЕН:8091
 ```
 
-Для подключения в **Lampa** (телевизор) — используй тот же адрес, логин и пароль.
+Для подключения в **Lampa** (телевизор) - используй тот же адрес, логин и пароль.
 
 ## Полезные команды
 
@@ -60,5 +60,5 @@ curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrSe
 ## Примечания
 
 - Сертификат Let's Encrypt продлевается автоматически. После продления нужно перезапустить TorrServer: `systemctl restart torrserver`
-- Порт 8090 (HTTP) закрыт   доступ только через HTTPS на 8091
+- Порт 8090 (HTTP) закрыт - доступ только через HTTPS на 8091
 - При повторном запуске скрипт обновит TorrServer, но не тронет существующий сертификат
