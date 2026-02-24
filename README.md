@@ -27,7 +27,7 @@ curl -s https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/mai
 ```
 
 После запуска скрипт задаст три вопроса:
-- Домен (например: `mydomen.com`)
+- Домен (например: `mydomain.com`)
 - Логин
 - Пароль (дважды для подтверждения)
 
