@@ -124,6 +124,7 @@ cat > "$TS_CONF_DIR/accs.db" << EOF
 }
 EOF
 
+chmod 600 "$TS_CONF_DIR/accs.db"
 ok "Файл авторизации создан"
 
 # =============================================================================
@@ -152,6 +153,11 @@ else
 fi
 
 ok "SSL-сертификат получен"
+
+# Устанавливаем права на файлы сертификата
+chmod 600 "/etc/letsencrypt/live/$DOMAIN/privkey.pem" 2>/dev/null || true
+chmod 644 "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null || true
+ok "Права на файлы сертификата настроены"
 
 # =============================================================================
 # Шаг 6 — Открытие портов в UFW
@@ -190,7 +196,7 @@ After=network-online.target
 Type=simple
 NonBlocking=true
 WorkingDirectory=/opt/torrserver
-ExecStart=/opt/torrserver/torrserver -p 8090 --httpauth --ssl --sslport 8091 --sslcert $CERT_PATH --sslkey $KEY_PATH
+ExecStart=/opt/torrserver/torrserver -p 8090 -i 127.0.0.1 --httpauth --ssl --sslport 8091 --sslcert $CERT_PATH --sslkey $KEY_PATH
 Restart=on-failure
 RestartSec=58
 
