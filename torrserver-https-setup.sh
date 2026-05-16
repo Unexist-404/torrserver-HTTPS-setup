@@ -86,7 +86,7 @@ fi
 
 if [ "$SERVER_IP" != "$DOMAIN_IP" ]; then
     warn "IP сервера ($SERVER_IP) не совпадает с IP домена ($DOMAIN_IP)"
-    read -p "Продолжить всё равно? (y/n): " FORCE
+    read -p "Продолжить всё равно? (y/n): " FORCE </dev/tty
     if [ "$FORCE" != "y" ] && [ "$FORCE" != "Y" ]; then
         exit 1
     fi
@@ -99,15 +99,23 @@ fi
 # =============================================================================
 info "Устанавливаем/обновляем TorrServer..."
 
-if [ -f /opt/torrserver/torrserver ]; then
-    info "TorrServer уже установлен, обновляем до последней версии..."
+# Ищем существующий бинарник (имя может быть torrserver или TorrServer-linux-amd64 и т.п.)
+TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
+
+if [ -n "$TS_BINARY" ]; then
+    info "TorrServer уже установлен ($TS_BINARY), обновляем до последней версии..."
     curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- --update --silent --root
 else
     info "Устанавливаем TorrServer..."
     curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- --install --silent --root
 fi
 
-ok "TorrServer установлен"
+# Определяем имя бинарника после установки
+TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
+if [ -z "$TS_BINARY" ]; then
+    err "Не удалось найти исполняемый файл TorrServer в /opt/torrserver/. Проверьте установку."
+fi
+ok "TorrServer установлен: $TS_BINARY"
 
 # =============================================================================
 # Шаг 4 — Настройка авторизации
@@ -143,11 +151,58 @@ fi
 if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     warn "Сертификат для $DOMAIN уже существует, пропускаем получение"
 else
-    # Получаем сертификат
-    # Используем standalone если нет nginx, иначе nginx плагин
+    WEBROOT="/var/www/html"
+    mkdir -p "$WEBROOT/.well-known/acme-challenge"
+
+    NGINX_RUNNING=false
     if command -v nginx &> /dev/null && systemctl is-active --quiet nginx; then
-        certbot certonly --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
+        NGINX_RUNNING=true
+    fi
+
+    if [ "$NGINX_RUNNING" = true ]; then
+        # Создаём временный конфиг для прохождения ACME challenge
+        NGINX_TEMP_CONF="/etc/nginx/sites-available/_certbot_${DOMAIN}.conf"
+        NGINX_TEMP_LINK="/etc/nginx/sites-enabled/_certbot_${DOMAIN}.conf"
+
+        cat > "$NGINX_TEMP_CONF" << NGINXEOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root ${WEBROOT};
+        allow all;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+NGINXEOF
+
+        ln -sf "$NGINX_TEMP_CONF" "$NGINX_TEMP_LINK"
+
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx
+            ok "Временный nginx конфиг для ACME challenge создан"
+        else
+            warn "nginx -t упал, пробуем standalone (остановим nginx на время)"
+            rm -f "$NGINX_TEMP_LINK" "$NGINX_TEMP_CONF"
+            systemctl stop nginx
+            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
+            systemctl start nginx
+        fi
+
+        if [ -f "$NGINX_TEMP_LINK" ]; then
+            # nginx рабочий — получаем сертификат через webroot
+            certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
+
+            # Убираем временный конфиг
+            rm -f "$NGINX_TEMP_LINK" "$NGINX_TEMP_CONF"
+            systemctl reload nginx
+        fi
     else
+        # nginx не запущен — используем standalone
         certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
     fi
 fi
@@ -196,7 +251,7 @@ After=network-online.target
 Type=simple
 NonBlocking=true
 WorkingDirectory=/opt/torrserver
-ExecStart=/opt/torrserver/torrserver -p 8090 --httpauth --ssl --sslport 8091 --sslcert $CERT_PATH --sslkey $KEY_PATH
+ExecStart=${TS_BINARY} -p 8090 --httpauth --ssl --sslport 8091 --sslcert ${CERT_PATH} --sslkey ${KEY_PATH}
 Restart=on-failure
 RestartSec=58
 
