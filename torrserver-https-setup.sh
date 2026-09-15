@@ -49,7 +49,7 @@ install_or_update_binary() {
 
     # Исключаем .bak/.old/резервные копии; берём самый свежий по дате изменения файл
     TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" \
-        ! -iname "*.bak" ! -iname "*.old" ! -iname "*~" 2>/dev/null \
+        ! -iname "*bak*" ! -iname "*old*" ! -iname "*~" 2>/dev/null \
         -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
     if [ -z "$TS_BINARY" ]; then
         err "Не удалось найти исполняемый файл TorrServer в /opt/torrserver/. Проверьте установку."
