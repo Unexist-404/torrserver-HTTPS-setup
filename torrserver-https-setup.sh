@@ -103,14 +103,19 @@ if [ "$MODE" = "update" ]; then
     echo "================================================="
     echo -e "${NC}"
 
-    if [ ! -f "$STATE_FILE" ]; then
-        err "Не найден сохранённый домен ($STATE_FILE). Запустите установку без --update один раз, либо передайте домен: torrserver-https-setup.sh --update mydomain.com"
-    fi
-
     if [ -n "$2" ]; then
         DOMAIN="$2"
-    else
+    elif [ -f "$STATE_FILE" ]; then
         DOMAIN=$(cat "$STATE_FILE")
+    else
+        err "Не найден сохранённый домен ($STATE_FILE) и домен не передан аргументом. Запустите: torrserver-https-setup.sh --update mydomain.com"
+    fi
+
+    # Сохраняем домен на будущее, если его не было (например, после ручного восстановления)
+    if [ ! -f "$STATE_FILE" ]; then
+        mkdir -p "$TS_CONF_DIR"
+        echo "$DOMAIN" > "$STATE_FILE"
+        chmod 600 "$STATE_FILE"
     fi
 
     info "Домен: $DOMAIN"
