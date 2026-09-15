@@ -2,6 +2,14 @@
 # =============================================================================
 # TorrServer Setup Script
 # Установка/обновление TorrServer + HTTPS через Let's Encrypt
+#
+# Режимы запуска:
+#   sudo bash torrserver-https-setup.sh            — первичная установка (интерактивно)
+#   sudo bash torrserver-https-setup.sh --update    — быстрое обновление (без вопросов)
+#
+# Одной строкой:
+#   Установка:  curl -fsSL https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/main/torrserver-https-setup.sh | sudo bash
+#   Обновление: curl -fsSL https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/main/torrserver-https-setup.sh | sudo bash -s -- --update
 # =============================================================================
 
 set -e
@@ -18,20 +26,113 @@ err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
 info() { echo -e "${BLUE}➜ $1${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 
+TS_CONF_DIR="/opt/torrserver"
+STATE_FILE="$TS_CONF_DIR/.setup_domain"
+
+MODE="install"
+if [ "$1" = "--update" ] || [ "$1" = "-u" ]; then
+    MODE="update"
+fi
+
+if [ "$EUID" -ne 0 ]; then
+    err "Запустите скрипт от root: sudo bash torrserver-https-setup.sh"
+fi
+
+# =============================================================================
+# Общая функция: установка/обновление бинарника + пересборка systemd unit
+# =============================================================================
+install_or_update_binary() {
+    local ACTION_FLAG="$1"   # --install или --update
+
+    info "Выполняем $ACTION_FLAG TorrServer..."
+    curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- "$ACTION_FLAG" --silent --root
+
+    TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
+    if [ -z "$TS_BINARY" ]; then
+        err "Не удалось найти исполняемый файл TorrServer в /opt/torrserver/. Проверьте установку."
+    fi
+    ok "Бинарник: $TS_BINARY"
+}
+
+rebuild_systemd_unit() {
+    local DOMAIN="$1"
+    local CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+    local KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+
+    if [ ! -f "$CERT_PATH" ]; then
+        err "Сертификат для $DOMAIN не найден по пути $CERT_PATH"
+    fi
+
+    cat > /etc/systemd/system/torrserver.service << EOF
+[Unit]
+Description=torrserver
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+NonBlocking=true
+WorkingDirectory=/opt/torrserver
+ExecStart=${TS_BINARY} -p 8090 --httpauth --ssl --sslport 8091 --sslcert ${CERT_PATH} --sslkey ${KEY_PATH}
+Restart=on-failure
+RestartSec=58
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable torrserver > /dev/null 2>&1
+    systemctl restart torrserver
+    sleep 3
+
+    if systemctl is-active --quiet torrserver; then
+        ok "TorrServer запущен (unit пересобран под $TS_BINARY)"
+    else
+        err "TorrServer не запустился. Проверьте: journalctl -u torrserver -n 20"
+    fi
+}
+
+# =============================================================================
+# РЕЖИМ: --update — быстрое обновление без вопросов
+# =============================================================================
+if [ "$MODE" = "update" ]; then
+    echo -e "${BOLD}"
+    echo "================================================="
+    echo "   TorrServer — быстрое обновление"
+    echo "================================================="
+    echo -e "${NC}"
+
+    if [ ! -f "$STATE_FILE" ]; then
+        err "Не найден сохранённый домен ($STATE_FILE). Запустите установку без --update один раз, либо передайте домен: torrserver-https-setup.sh --update mydomain.com"
+    fi
+
+    if [ -n "$2" ]; then
+        DOMAIN="$2"
+    else
+        DOMAIN=$(cat "$STATE_FILE")
+    fi
+
+    info "Домен: $DOMAIN"
+
+    install_or_update_binary "--update"
+    rebuild_systemd_unit "$DOMAIN"
+
+    echo ""
+    echo -e "${BOLD}${GREEN}Обновление завершено.${NC} Логин/пароль и сертификат не менялись."
+    echo -e "  URL: ${GREEN}https://$DOMAIN:8091${NC}"
+    exit 0
+fi
+
+# =============================================================================
+# РЕЖИМ: install — первичная установка (интерактивно)
+# =============================================================================
 echo -e "${BOLD}"
 echo "================================================="
 echo "   TorrServer — Установка и настройка HTTPS"
 echo "================================================="
 echo -e "${NC}"
 
-# Проверяем что запущены от root
-if [ "$EUID" -ne 0 ]; then
-    err "Запустите скрипт от root: sudo bash torrserver-setup.sh"
-fi
-
-# =============================================================================
-# Шаг 1 — Ввод данных
-# =============================================================================
 echo -e "${BOLD}Введите необходимые данные:${NC}"
 echo ""
 
@@ -97,35 +198,15 @@ fi
 # =============================================================================
 # Шаг 3 — Установка/обновление TorrServer
 # =============================================================================
-info "Устанавливаем/обновляем TorrServer..."
-
-# Ищем существующий бинарник (имя может быть torrserver или TorrServer-linux-amd64 и т.п.)
-TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
-
-if [ -n "$TS_BINARY" ]; then
-    info "TorrServer уже установлен ($TS_BINARY), обновляем до последней версии..."
-    curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- --update --silent --root
-else
-    info "Устанавливаем TorrServer..."
-    curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- --install --silent --root
-fi
-
-# Определяем имя бинарника после установки
-TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
-if [ -z "$TS_BINARY" ]; then
-    err "Не удалось найти исполняемый файл TorrServer в /opt/torrserver/. Проверьте установку."
-fi
-ok "TorrServer установлен: $TS_BINARY"
+install_or_update_binary "--install"
 
 # =============================================================================
 # Шаг 4 — Настройка авторизации
 # =============================================================================
 info "Настраиваем авторизацию..."
 
-TS_CONF_DIR="/opt/torrserver"
 mkdir -p "$TS_CONF_DIR"
 
-# Создаём файл accs.db с логином и паролем
 cat > "$TS_CONF_DIR/accs.db" << EOF
 {
     "$TS_USER": "$TS_PASS"
@@ -140,14 +221,12 @@ ok "Файл авторизации создан"
 # =============================================================================
 info "Получаем SSL-сертификат для $DOMAIN..."
 
-# Проверяем установлен ли certbot
 if ! command -v certbot &> /dev/null; then
     info "Устанавливаем certbot..."
     apt-get update -q
     apt-get install -y certbot
 fi
 
-# Проверяем есть ли уже сертификат
 if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     warn "Сертификат для $DOMAIN уже существует, пропускаем получение"
 else
@@ -160,7 +239,6 @@ else
     fi
 
     if [ "$NGINX_RUNNING" = true ]; then
-        # Создаём временный конфиг для прохождения ACME challenge
         NGINX_TEMP_CONF="/etc/nginx/sites-available/_certbot_${DOMAIN}.conf"
         NGINX_TEMP_LINK="/etc/nginx/sites-enabled/_certbot_${DOMAIN}.conf"
 
@@ -194,22 +272,17 @@ NGINXEOF
         fi
 
         if [ -f "$NGINX_TEMP_LINK" ]; then
-            # nginx рабочий — получаем сертификат через webroot
             certbot certonly --webroot -w "$WEBROOT" -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
-
-            # Убираем временный конфиг
             rm -f "$NGINX_TEMP_LINK" "$NGINX_TEMP_CONF"
             systemctl reload nginx
         fi
     else
-        # nginx не запущен — используем standalone
         certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email
     fi
 fi
 
 ok "SSL-сертификат получен"
 
-# Устанавливаем права на файлы сертификата
 chmod 600 "/etc/letsencrypt/live/$DOMAIN/privkey.pem" 2>/dev/null || true
 chmod 644 "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null || true
 ok "Права на файлы сертификата настроены"
@@ -221,9 +294,7 @@ info "Настраиваем файрвол..."
 
 if command -v ufw &> /dev/null; then
     ufw allow 8091/tcp > /dev/null 2>&1
-    # Закрываем 8090 если вдруг был открыт ранее
     ufw delete allow 8090/tcp > /dev/null 2>&1 || true
-    # Перезапускаем UFW если он активен
     if ufw status | grep -q "Status: active"; then
         ufw disable > /dev/null 2>&1
         echo "y" | ufw enable > /dev/null 2>&1
@@ -237,39 +308,11 @@ fi
 # Шаг 7 — Настройка systemd сервиса
 # =============================================================================
 info "Настраиваем systemd сервис..."
+rebuild_systemd_unit "$DOMAIN"
 
-CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-
-cat > /etc/systemd/system/torrserver.service << EOF
-[Unit]
-Description=torrserver
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=simple
-NonBlocking=true
-WorkingDirectory=/opt/torrserver
-ExecStart=${TS_BINARY} -p 8090 --httpauth --ssl --sslport 8091 --sslcert ${CERT_PATH} --sslkey ${KEY_PATH}
-Restart=on-failure
-RestartSec=58
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable torrserver > /dev/null 2>&1
-systemctl restart torrserver
-
-sleep 3
-
-if systemctl is-active --quiet torrserver; then
-    ok "TorrServer запущен"
-else
-    err "TorrServer не запустился. Проверьте: journalctl -u torrserver -n 20"
-fi
+# Сохраняем домен для будущих быстрых обновлений
+echo "$DOMAIN" > "$STATE_FILE"
+chmod 600 "$STATE_FILE"
 
 # =============================================================================
 # Итог
@@ -295,5 +338,5 @@ echo -e "${BOLD}Полезные команды:${NC}"
 echo -e "  Статус:      systemctl status torrserver"
 echo -e "  Логи:        journalctl -u torrserver -n 50"
 echo -e "  Перезапуск:  systemctl restart torrserver"
-echo -e "  Обновление:  bash torrserver-setup.sh"
+echo -e "  Обновление:  sudo bash torrserver-https-setup.sh --update"
 echo ""
