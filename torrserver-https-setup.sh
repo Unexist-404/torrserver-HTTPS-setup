@@ -47,7 +47,10 @@ install_or_update_binary() {
     info "Выполняем $ACTION_FLAG TorrServer..."
     curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- "$ACTION_FLAG" --silent --root
 
-    TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" 2>/dev/null | head -1)
+    # Исключаем .bak/.old/резервные копии; берём самый свежий по дате изменения файл
+    TS_BINARY=$(find /opt/torrserver -maxdepth 1 -type f -executable -iname "torrserver*" \
+        ! -iname "*.bak" ! -iname "*.old" ! -iname "*~" 2>/dev/null \
+        -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
     if [ -z "$TS_BINARY" ]; then
         err "Не удалось найти исполняемый файл TorrServer в /opt/torrserver/. Проверьте установку."
     fi
@@ -63,6 +66,17 @@ rebuild_systemd_unit() {
         err "Сертификат для $DOMAIN не найден по пути $CERT_PATH"
     fi
 
+    # Если unit-файл уже существует — сохраняем любые кастомные флаги сверх стандартных
+    # (например --force-https), добавленные вручную ранее.
+    EXTRA_FLAGS=""
+    if [ -f /etc/systemd/system/torrserver.service ]; then
+        EXTRA_FLAGS=$(grep '^ExecStart=' /etc/systemd/system/torrserver.service \
+            | sed -E 's#^ExecStart=\S+ -p [0-9]+ --httpauth --ssl --sslport [0-9]+ --sslcert \S+ --sslkey \S+##')
+    fi
+    if [ -n "$EXTRA_FLAGS" ]; then
+        info "Сохраняю дополнительные флаги из текущего unit-файла:$EXTRA_FLAGS"
+    fi
+
     cat > /etc/systemd/system/torrserver.service << EOF
 [Unit]
 Description=torrserver
@@ -73,7 +87,7 @@ After=network-online.target
 Type=simple
 NonBlocking=true
 WorkingDirectory=/opt/torrserver
-ExecStart=${TS_BINARY} -p 8090 --httpauth --ssl --sslport 8091 --sslcert ${CERT_PATH} --sslkey ${KEY_PATH}
+ExecStart=${TS_BINARY} -p 8090 --httpauth --ssl --sslport 8091 --sslcert ${CERT_PATH} --sslkey ${KEY_PATH}${EXTRA_FLAGS}
 Restart=on-failure
 RestartSec=58
 
