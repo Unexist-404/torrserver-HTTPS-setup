@@ -60,7 +60,7 @@ journalctl -u torrserver -n 50
 systemctl restart torrserver
 
 # Update TorrServer
-curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | sudo bash -s -- --update --silent --root
+curl -fsSL https://raw.githubusercontent.com/Unexist-404/torrserver-HTTPS-setup/main/torrserver-https-setup.sh | sudo bash -s -- --update
 ```
 
 ## Security notes
