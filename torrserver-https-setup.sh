@@ -44,6 +44,36 @@ fi
 install_or_update_binary() {
     local ACTION_FLAG="$1"   # --install или --update
 
+    # Официальный установщик ищет бинарник строго по имени TorrServer-linux-<arch>
+    # (или TorrServer-gst-linux-<arch>). Если файл называется иначе (например просто
+    # "torrserver"), установщик решает, что TorrServer не установлен, и в режиме
+    # --update тихо ничего не делает. Чтобы он опознал существующую установку,
+    # создаём симлинк с каноничным именем на реальный файл — тогда установщик
+    # скачает обновление "сквозь" симлинк прямо в существующий файл, имя которого
+    # не изменится.
+    local ARCH
+    case "$(uname -m)" in
+        x86_64) ARCH="amd64" ;;
+        aarch64) ARCH="arm64" ;;
+        armv7*) ARCH="arm7" ;;
+        armv6*) ARCH="arm5" ;;
+        i386|i686) ARCH="386" ;;
+        *) ARCH="amd64" ;;
+    esac
+    local CANON_STD="TorrServer-linux-${ARCH}"
+    local CANON_GST="TorrServer-gst-linux-${ARCH}"
+
+    if [ ! -e "$TS_CONF_DIR/$CANON_STD" ] && [ ! -e "$TS_CONF_DIR/$CANON_GST" ]; then
+        local EXISTING
+        EXISTING=$(find "$TS_CONF_DIR" -maxdepth 1 -type f -executable -iname "torrserver*" \
+            ! -iname "*bak*" ! -iname "*old*" ! -iname "*~" 2>/dev/null \
+            -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+        if [ -n "$EXISTING" ]; then
+            info "Бинарник называется нестандартно ($(basename "$EXISTING")), создаю симлинк $CANON_STD для установщика"
+            ln -sf "$(basename "$EXISTING")" "$TS_CONF_DIR/$CANON_STD"
+        fi
+    fi
+
     info "Выполняем $ACTION_FLAG TorrServer..."
     curl -s https://raw.githubusercontent.com/YouROK/TorrServer/master/installTorrServerLinux.sh | bash -s -- "$ACTION_FLAG" --silent --root
 
