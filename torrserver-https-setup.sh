@@ -102,6 +102,9 @@ rebuild_systemd_unit() {
     if [ -f /etc/systemd/system/torrserver.service ]; then
         EXTRA_FLAGS=$(grep '^ExecStart=' /etc/systemd/system/torrserver.service \
             | sed -E 's#^ExecStart=\S+ -p [0-9]+ --httpauth --ssl --sslport [0-9]+ --sslcert \S+ --sslkey \S+##')
+        # Если sed ничего не вырезал (unit от установщика TorrServer без наших флагов),
+        # в EXTRA_FLAGS осталась вся строка ExecStart=... — это не дополнительные флаги.
+        case "$EXTRA_FLAGS" in ExecStart=*) EXTRA_FLAGS="" ;; esac
     fi
     if [ -n "$EXTRA_FLAGS" ]; then
         info "Сохраняю дополнительные флаги из текущего unit-файла:$EXTRA_FLAGS"
@@ -335,6 +338,15 @@ ok "SSL-сертификат получен"
 chmod 600 "/etc/letsencrypt/live/$DOMAIN/privkey.pem" 2>/dev/null || true
 chmod 644 "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null || true
 ok "Права на файлы сертификата настроены"
+
+# TorrServer кэширует сертификат в памяти при старте — после продления нужен перезапуск
+mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+cat > /etc/letsencrypt/renewal-hooks/deploy/torrserver.sh << 'HOOKEOF'
+#!/bin/sh
+systemctl restart torrserver
+HOOKEOF
+chmod +x /etc/letsencrypt/renewal-hooks/deploy/torrserver.sh
+ok "Хук продления сертификата создан (перезапуск TorrServer)"
 
 # =============================================================================
 # Шаг 6 — Открытие портов в UFW
